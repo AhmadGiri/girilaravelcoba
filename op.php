@@ -1,57 +1,33 @@
-namespace App\Http\Controllers;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\MovieController;
+use App\Http\Controllers\TicketPriceController;
+use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\OrderController;
 
-use App\Models\Schedule;
-use App\Models\Movie;
-use App\Models\TicketPrice;
-use Illuminate\Http\Request;
+// 1. Sisi Customer (Publik)
+Route::get('/', [OrderController::class, 'index'])->name('customer.index');
+Route::post('/checkout', [OrderController::class, 'store'])->name('customer.checkout');
 
-class ScheduleController extends Controller
-{
-    public function index() {
-        $schedules = Schedule::with(['movie', 'ticketPrice'])->latest()->paginate(10);
-        return view('admin.schedules.index', compact('schedules'));
-    }
+// 2. Dashboard Utama Admin (Bawaan Breeze yang diarahkan ke Rekap Pesanan)
+Route::get('/dashboard', [OrderController::class, 'adminDashboard'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
-    public function create() {
-        $movies = Movie::all();
-        $ticketPrices = TicketPrice::all();
-        return view('admin.schedules.create', compact('movies', 'ticketPrices'));
-    }
+// 3. Grup Route Terproteksi (Admin)
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    public function store(Request $request) {
-        $request->validate([
-            'movie_id' => 'required|exists:movies,id',
-            'ticket_price_id' => 'required|exists:ticket_prices,id',
-            'show_time' => 'required|date',
-            'studio' => 'required|string|max:50',
-        ]);
+    // Alias Admin Dashboard & Update Status Pesanan
+    Route::get('/admin/dashboard', [OrderController::class, 'adminDashboard'])->name('admin.dashboard');
+    Route::patch('/admin/orders/{id}/status', [OrderController::class, 'updateStatus'])->name('admin.orders.updateStatus');
 
-        Schedule::create($request->all());
+    // Resource CRUD Master Data Bioskop
+    Route::resource('/admin/movies', MovieController::class);
+    Route::resource('/admin/ticket-prices', TicketPriceController::class);
+    Route::resource('/admin/schedules', ScheduleController::class);
+});
 
-        return redirect()->route('schedules.index')->with('success', 'Jadwal tayang berhasil ditambahkan!');
-    }
-
-    public function edit(Schedule $schedule) {
-        $movies = Movie::all();
-        $ticketPrices = TicketPrice::all();
-        return view('admin.schedules.edit', compact('schedule', 'movies', 'ticketPrices'));
-    }
-
-    public function update(Request $request, Schedule $schedule) {
-        $request->validate([
-            'movie_id' => 'required|exists:movies,id',
-            'ticket_price_id' => 'required|exists:ticket_prices,id',
-            'show_time' => 'required|date',
-            'studio' => 'required|string|max:50',
-        ]);
-
-        $schedule->update($request->all());
-
-        return redirect()->route('schedules.index')->with('success', 'Jadwal tayang berhasil diperbarui!');
-    }
-
-    public function destroy(Schedule $schedule) {
-        $schedule->delete();
-        return redirect()->route('schedules.index')->with('success', 'Jadwal tayang berhasil dihapus!');
-    }
-}
+require __DIR__.'/auth.php';
